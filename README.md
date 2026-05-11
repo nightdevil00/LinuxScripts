@@ -160,7 +160,7 @@ A collection of Arch Linux shell scripts organized by category. These scripts we
 
 | File | Description |
 |------|-------------|
-| `cleanup_packages_keep_list.sh` | Removes all pacman packages except a hardcoded keep-list, empties `/home/mihai/`, optional reboot. |
+| `cleanup_packages_keep_list.sh` | Removes all pacman packages except a hardcoded keep-list, empties `/home/user/`, optional reboot. |
 | `cleanup_packages_mgmt.sh` | Identical to `cleanup_packages_keep_list.sh`. |
 | `export_package_lists.sh` | Exports pacman explicitly installed packages and Flatpak apps/runtimes to text files. |
 | `export_package_lists_mgmt.sh` | Identical to `export_package_lists.sh`. |
