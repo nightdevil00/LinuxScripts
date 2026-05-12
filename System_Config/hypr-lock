@@ -1,0 +1,70 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+DIRS=(~/.local/share/omarchy ~/.config/hypr)
+PACMAN_CONF=/etc/pacman.conf
+
+lock_folders() {
+  find "${DIRS[@]}" -not -type l -print0 | sudo xargs -0 chattr +i
+  echo "Folders locked (immutable)"
+}
+
+unlock_folders() {
+  find "${DIRS[@]}" -not -type l -print0 | sudo xargs -0 chattr -i
+  echo "Folders unlocked (mutable)"
+}
+
+add_ignore() {
+  if grep -q '^IgnorePkg = hyprland' "$PACMAN_CONF"; then
+    echo "Already in IgnorePkg"
+  else
+    sudo sed -i '/^ParallelDownloads = 5$/a IgnorePkg = hyprland' "$PACMAN_CONF"
+    echo "hyprland added to IgnorePkg"
+  fi
+}
+
+remove_ignore() {
+  if grep -q '^IgnorePkg = hyprland' "$PACMAN_CONF"; then
+    sudo sed -i '/^IgnorePkg = hyprland$/d' "$PACMAN_CONF"
+    echo "hyprland removed from IgnorePkg"
+  else
+    echo "Not in IgnorePkg"
+  fi
+}
+
+menu() {
+  echo "=== hypr-lock ==="
+  PS3="Select an option: "
+  select opt in "Lock folders" "Unlock folders" "Hold pkg (IgnorePkg)" "Unhold pkg" "Lock all" "Unlock all" "Quit"; do
+    case $REPLY in
+      1) lock_folders ;;
+      2) unlock_folders ;;
+      3) add_ignore ;;
+      4) remove_ignore ;;
+      5) lock_folders; add_ignore ;;
+      6) unlock_folders; remove_ignore ;;
+      7) exit 0 ;;
+      *) echo "Invalid option" ;;
+    esac
+    echo
+    menu
+    break
+  done
+}
+
+if [ $# -eq 0 ]; then
+  menu
+else
+  case "${1:-}" in
+    lock)   lock_folders ;;
+    unlock) unlock_folders ;;
+    hold)   add_ignore ;;
+    unhold) remove_ignore ;;
+    all)    lock_folders; add_ignore ;;
+    none)   unlock_folders; remove_ignore ;;
+    *)
+      echo "Usage: hypr-lock {lock|unlock|hold|unhold|all|none}"
+      exit 1
+      ;;
+  esac
+fi
