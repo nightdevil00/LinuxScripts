@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+CONF=/etc/sysctl.d/99-snappiness.conf
+
+apply() {
+  sudo sysctl -w vm.swappiness=10
+  sudo sysctl -w vm.vfs_cache_pressure=50
+  sudo sysctl -w vm.dirty_ratio=10
+  sudo sysctl -w vm.dirty_background_ratio=5
+}
+
+persist() {
+  printf '%s\n' \
+    'vm.swappiness=10' \
+    'vm.vfs_cache_pressure=50' \
+    'vm.dirty_ratio=10' \
+    'vm.dirty_background_ratio=5' |
+    sudo tee "$CONF" >/dev/null
+  echo "wrote $CONF"
+}
+
+case "${1:-}" in
+  --persist) apply && persist ;;
+  --remove)
+    sudo rm -f "$CONF"
+    apply  # reset to defaults (reload required, just inform)
+    echo "removed $CONF — reboot or apply defaults manually"
+    ;;
+  *) apply ;;
+esac
