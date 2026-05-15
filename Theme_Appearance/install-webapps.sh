@@ -107,24 +107,24 @@ chmod +x "$BIN_DIR/niri-launch-webapp" "$BIN_DIR/niri-launch-or-focus" \
 
 declare -A ICONS
 ICONS=(
-  [HEY]=https://dashboardicons.com/DALL-E_AI_Icon_HEY.png
-  [Basecamp]=https://dashboardicons.com/DALL-E_AI_Icon_Basecamp.png
-  [WhatsApp]=https://dashboardicons.com/DALL-E_AI_Icon_WhatsApp.png
-  [Google\ Photos]=https://dashboardicons.com/DALL-E_AI_Icon_Google_Photos.png
-  [Google\ Contacts]=https://dashboardicons.com/DALL-E_AI_Icon_Google_Contacts.png
-  [Google\ Messages]=https://dashboardicons.com/DALL-E_AI_Icon_Google_Messages.png
-  [Google\ Maps]=https://dashboardicons.com/DALL-E_AI_Icon_Google_Maps.png
-  [ChatGPT]=https://dashboardicons.com/DALL-E_AI_Icon_ChatGPT.png
-  [YouTube]=https://dashboardicons.com/DALL-E_AI_Icon_YouTube.png
-  [GitHub]=https://dashboardicons.com/DALL-E_AI_Icon_GitHub.png
-  [X]=https://dashboardicons.com/DALL-E_AI_Icon_X.png
-  [Figma]=https://dashboardicons.com/DALL-E_AI_Icon_Figma.png
-  [Discord]=https://dashboardicons.com/DALL-E_AI_Icon_Discord.png
-  [Zoom]=https://dashboardicons.com/DALL-E_AI_Icon_Zoom.png
-  [Fizzy]=https://dashboardicons.com/DALL-E_AI_Icon_Fizzy.png
-  [YouTube\ Music]=https://music.youtube.com/img/favicon_96.png
-  [Gmail]=https://ssl.gstatic.com/images/branding/product/2x/gmail_96dp.png
-  [Google\ Drive]=https://ssl.gstatic.com/images/branding/product/2x/drive_96dp.png
+  [HEY-Niri]=https://dashboardicons.com/DALL-E_AI_Icon_HEY.png
+  [Basecamp-Niri]=https://dashboardicons.com/DALL-E_AI_Icon_Basecamp.png
+  [WhatsApp-Niri]=https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/png/whatsapp.png
+  [Google\ Photos-Niri]=https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/png/google-photos.png
+  [Google\ Contacts-Niri]=https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/png/google-contacts.png
+  [Google\ Messages-Niri]=https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/png/google-messages.png
+  [Google\ Maps-Niri]=https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/png/google-maps.png
+  [ChatGPT-Niri]=https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/png/chatgpt.png
+  [YouTube-Niri]=https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/png/youtube.png
+  [GitHub-Niri]=https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/png/github.png
+  [X-Niri]=https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/png/x.png
+  [Figma-Niri]=https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/png/figma.png
+  [Discord-Niri]=https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/png/discord.png
+  [Zoom-Niri]=https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/png/zoom.png
+  [Fizzy-Niri]=https://dashboardicons.com/DALL-E_AI_Icon_Fizzy.png
+  [YouTube\ Music-Niri]=https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/png/youtube-music.png
+  [Gmail-Niri]=https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/png/gmail.png
+  [Google\ Drive-Niri]=https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/png/google-drive.png
 )
 
 echo "Downloading icons..."
@@ -140,24 +140,24 @@ for name in "${!ICONS[@]}"; do
   dest="$ICON_DIR/$name.png"
   if [[ ! -s $dest ]]; then
     case $name in
-      HEY)          url="https://app.hey.com" ;;
-      Basecamp)     url="https://launchpad.37signals.com" ;;
-      WhatsApp)     url="https://web.whatsapp.com" ;;
-      Google\ Photos) url="https://photos.google.com" ;;
-      Google\ Contacts) url="https://contacts.google.com" ;;
-      Google\ Messages) url="https://messages.google.com" ;;
-      Google\ Maps) url="https://maps.google.com" ;;
-      ChatGPT)      url="https://chatgpt.com" ;;
-      YouTube)      url="https://youtube.com" ;;
-      GitHub)       url="https://github.com" ;;
-      X)            url="https://x.com" ;;
-      Figma)        url="https://figma.com" ;;
-      Discord)      url="https://discord.com" ;;
-      Zoom)         url="https://zoom.us" ;;
-      Fizzy)        url="https://app.fizzy.do" ;;
-      YouTube\ Music) url="https://music.youtube.com" ;;
-      Gmail)        url="https://mail.google.com" ;;
-      Google\ Drive) url="https://drive.google.com" ;;
+      HEY-Niri)          url="https://app.hey.com" ;;
+      Basecamp-Niri)     url="https://launchpad.37signals.com" ;;
+      WhatsApp-Niri)     url="https://web.whatsapp.com" ;;
+      Google\ Photos-Niri) url="https://photos.google.com" ;;
+      Google\ Contacts-Niri) url="https://contacts.google.com" ;;
+      Google\ Messages-Niri) url="https://messages.google.com" ;;
+      Google\ Maps-Niri) url="https://maps.google.com" ;;
+      ChatGPT-Niri)      url="https://chatgpt.com" ;;
+      YouTube-Niri)      url="https://youtube.com" ;;
+      GitHub-Niri)       url="https://github.com" ;;
+      X-Niri)            url="https://x.com" ;;
+      Figma-Niri)        url="https://figma.com" ;;
+      Discord-Niri)      url="https://discord.com" ;;
+      Zoom-Niri)         url="https://zoom.us" ;;
+      Fizzy-Niri)        url="https://app.fizzy.do" ;;
+      YouTube\ Music-Niri) url="https://music.youtube.com" ;;
+      Gmail-Niri)        url="https://mail.google.com" ;;
+      Google\ Drive-Niri) url="https://drive.google.com" ;;
     esac
     favicon="https://www.google.com/s2/favicons?domain=$url&sz=128"
     curl -fsSL -o "$dest" "$favicon" 2>/dev/null && echo "  $name (favicon)"
@@ -200,24 +200,24 @@ EOF
 }
 
 echo "Creating desktop files..."
-install_webapp "HEY"             https://app.hey.com                        "HEY.png"             "niri-webapp-handler-hey %u" "x-scheme-handler/mailto"
-install_webapp "Basecamp"        https://launchpad.37signals.com            "Basecamp.png"        "" ""
-install_webapp "WhatsApp"        https://web.whatsapp.com/                  "WhatsApp.png"        "" ""
-install_webapp "Google Photos"   https://photos.google.com/                 "Google Photos.png"   "" ""
-install_webapp "Google Contacts" https://contacts.google.com/               "Google Contacts.png" "" ""
-install_webapp "Google Messages" https://messages.google.com/web/conversations "Google Messages.png" "" ""
-install_webapp "Google Maps"     https://maps.google.com                    "Google Maps.png"     "" ""
-install_webapp "ChatGPT"         https://chatgpt.com/                       "ChatGPT.png"         "" ""
-install_webapp "YouTube"         https://youtube.com/                       "YouTube.png"         "" ""
-install_webapp "GitHub"          https://github.com/                        "GitHub.png"          "" ""
-install_webapp "X"               https://x.com/                             "X.png"               "" ""
-install_webapp "Figma"           https://figma.com/                         "Figma.png"           "" ""
-install_webapp "Discord"         https://discord.com/channels/@me           "Discord.png"         "" ""
-install_webapp "Zoom"            https://app.zoom.us/wc/home                "Zoom.png"            "niri-webapp-handler-zoom %u" "x-scheme-handler/zoommtg;x-scheme-handler/zoomus"
-install_webapp "Fizzy"           https://app.fizzy.do/                      "Fizzy.png"           "" ""
-install_webapp "YouTube Music"   https://music.youtube.com                  "YouTube Music.png"   "" ""
-install_webapp "Gmail"           https://mail.google.com                    "Gmail.png"           "" ""
-install_webapp "Google Drive"    https://drive.google.com                   "Google Drive.png"    "" ""
+install_webapp "HEY-Niri"             https://app.hey.com                        "HEY-Niri.png"             "niri-webapp-handler-hey %u" "x-scheme-handler/mailto"
+install_webapp "Basecamp-Niri"        https://launchpad.37signals.com            "Basecamp-Niri.png"        "" ""
+install_webapp "WhatsApp-Niri"        https://web.whatsapp.com/                  "WhatsApp-Niri.png"        "" ""
+install_webapp "Google Photos-Niri"   https://photos.google.com/                 "Google Photos-Niri.png"   "" ""
+install_webapp "Google Contacts-Niri" https://contacts.google.com/               "Google Contacts-Niri.png" "" ""
+install_webapp "Google Messages-Niri" https://messages.google.com/web/conversations "Google Messages-Niri.png" "" ""
+install_webapp "Google Maps-Niri"     https://maps.google.com                    "Google Maps-Niri.png"     "" ""
+install_webapp "ChatGPT-Niri"         https://chatgpt.com/                       "ChatGPT-Niri.png"         "" ""
+install_webapp "YouTube-Niri"         https://youtube.com/                       "YouTube-Niri.png"         "" ""
+install_webapp "GitHub-Niri"          https://github.com/                        "GitHub-Niri.png"          "" ""
+install_webapp "X-Niri"               https://x.com/                             "X-Niri.png"               "" ""
+install_webapp "Figma-Niri"           https://figma.com/                         "Figma-Niri.png"           "" ""
+install_webapp "Discord-Niri"         https://discord.com/channels/@me           "Discord-Niri.png"         "" ""
+install_webapp "Zoom-Niri"            https://app.zoom.us/wc/home                "Zoom-Niri.png"            "niri-webapp-handler-zoom %u" "x-scheme-handler/zoommtg;x-scheme-handler/zoomus"
+install_webapp "Fizzy-Niri"           https://app.fizzy.do/                      "Fizzy-Niri.png"           "" ""
+install_webapp "YouTube Music-Niri"   https://music.youtube.com                  "YouTube Music-Niri.png"   "" ""
+install_webapp "Gmail-Niri"           https://mail.google.com                    "Gmail-Niri.png"           "" ""
+install_webapp "Google Drive-Niri"    https://drive.google.com                   "Google Drive-Niri.png"    "" ""
 
 # ── Step 5: add ~/.local/bin to PATH ──
 
