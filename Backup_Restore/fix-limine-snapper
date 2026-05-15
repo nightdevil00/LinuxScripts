@@ -1,0 +1,77 @@
+#!/bin/bash
+set -euo pipefail
+
+RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; NC='\033[0m'
+ok()  { echo -e "${GREEN}✓${NC} $1"; }
+warn(){ echo -e "${YELLOW}⚠${NC} $1"; }
+fail(){ echo -e "${RED}✗${NC} $1"; }
+
+if [[ $EUID -ne 0 ]]; then
+  exec sudo "$0" "$@"
+fi
+
+echo "=== limine-snapper-sync fixup ==="
+echo ""
+
+# 1. ROOT_SNAPSHOTS_PATH
+SNAPSHOTS_SUBVOL=$(awk '/\/.snapshots/ && $3 == "btrfs" {print $4}' /proc/mounts | grep -oP 'subvol=/\K[^,]+' | head -1)
+SNAPSHOTS_SUBVOL="/@${SNAPSHOTS_SUBVOL#@}"
+
+if grep -q "ROOT_SNAPSHOTS_PATH=" /etc/default/limine 2>/dev/null; then
+  ok "ROOT_SNAPSHOTS_PATH already set in /etc/default/limine"
+else
+  echo "ROOT_SNAPSHOTS_PATH=\"$SNAPSHOTS_SUBVOL\"" >> /etc/default/limine
+  ok "Added ROOT_SNAPSHOTS_PATH=$SNAPSHOTS_SUBVOL to /etc/default/limine"
+fi
+
+# 2. Snapper root config
+if snapper list-configs 2>/dev/null | grep -q "^root"; then
+  ok "Snapper root config exists"
+else
+  warn "Snapper root config missing — recreating"
+  MOUNTED=$(findmnt -n /.snapshots 2>/dev/null && echo 1 || echo 0)
+  if [[ $MOUNTED -eq 1 ]]; then
+    umount /.snapshots
+  fi
+  snapper -c root create-config / 2>/dev/null || true
+  # Remove the .snapshots subvol snapper created under @
+  btrfs subvolume list / 2>/dev/null | awk '/path @$/{top=$2} /.snapshots/ && $2 > top {print $2}' | while read -r id; do
+    btrfs subvolume delete "/.snapshots" 2>/dev/null || btrfs subvolume delete "//.snapshots" 2>/dev/null || true
+  done
+  mkdir -p /.snapshots
+  mount -o subvol="$SNAPSHOTS_SUBVOL" "$(findmnt -n -o SOURCE /)" /.snapshots
+  # Apply Omarchy default config
+  OMARCHY_DEFAULT="/home/mihai/.local/share/omarchy/default/snapper/root"
+  if [[ -f $OMARCHY_DEFAULT ]]; then
+    cp "$OMARCHY_DEFAULT" /etc/snapper/configs/root
+  fi
+  ok "Snapper root config recreated"
+fi
+
+# 3. Install missing deps
+DEPS=()
+for pkg in inotify-tools; do
+  pacman -Qi "$pkg" &>/dev/null || DEPS+=("$pkg")
+done
+if [[ ${#DEPS[@]} -gt 0 ]]; then
+  pacman -S --noconfirm "${DEPS[@]}"
+  ok "Installed: ${DEPS[*]}"
+else
+  ok "All dependency packages installed"
+fi
+
+# 4. Run sync
+echo ""
+limine-snapper-sync
+echo ""
+
+# 5. Enable & start service
+systemctl enable --now limine-snapper-sync.service 2>/dev/null
+if systemctl is-active --quiet limine-snapper-sync.service; then
+  ok "limine-snapper-sync.service is active"
+else
+  warn "Service failed to start — check: systemctl status limine-snapper-sync.service"
+fi
+
+echo ""
+echo "=== Done ==="
