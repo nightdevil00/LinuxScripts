@@ -77,18 +77,115 @@ SCRIPT
 cat >"$BIN_DIR/niri-webapp-remove" <<'SCRIPT'
 #!/bin/bash
 set -e
-if (( $# == 0 )); then
-  echo "Usage: niri-webapp-remove <name...>" >&2
-  for f in "$HOME/.local/share/applications/"*.desktop; do
-    grep -q '^Exec=.*\(niri-launch-webapp\|niri-webapp-handler\).*' "$f" 2>/dev/null &&
-      basename "$f" .desktop
-  done; exit 1
+
+APP_DIR="$HOME/.local/share/applications"
+ICON_DIR="$HOME/.local/share/applications/icons"
+
+if ! pgrep -x dms &>/dev/null; then
+  echo "Warning: dms not detected — skipping desktop database refresh." >&2
+  NO_DMS=1
+else
+  NO_DMS=0
 fi
-for APP_NAME in "$@"; do
-  rm -f "$HOME/.local/share/applications/$APP_NAME.desktop"
-  rm -f "$HOME/.local/share/applications/icons/$APP_NAME.png"
-  echo "Removed $APP_NAME"
+
+list_webapps() {
+  local i=0
+  for f in "$APP_DIR"/*.desktop; do
+    [[ -f $f ]] || continue
+    grep -q '^Exec=.*\(niri-launch-webapp\|niri-webapp-handler\).*' "$f" 2>/dev/null || continue
+    basename "$f" .desktop
+  done
+}
+
+if (( $# > 0 )); then
+  for APP_NAME in "$@"; do
+    rm -f "$APP_DIR/$APP_NAME.desktop"
+    rm -f "$ICON_DIR/$APP_NAME.png"
+    echo "Removed $APP_NAME"
+  done
+  exit 0
+fi
+
+mapfile -t APPS < <(list_webapps)
+if (( ${#APPS[@]} == 0 )); then
+  echo "No webapps installed." >&2; exit 0
+fi
+
+echo "Installed webapps:"
+for i in "${!APPS[@]}"; do
+  printf "  %d) %s\n" "$((i+1))" "${APPS[$i]}"
 done
+echo ""
+read -r -p "Enter numbers to remove (space-separated) or 0 to cancel: " -a SELECTED
+for n in "${SELECTED[@]}"; do
+  (( n == 0 )) && echo "Cancelled." && exit 0
+  idx=$((n-1))
+  [[ -n "${APPS[$idx]:-}" ]] || { echo "Invalid: $n" >&2; continue; }
+  name="${APPS[$idx]}"
+  rm -f "$APP_DIR/$name.desktop" "$ICON_DIR/$name.png"
+  echo "Removed $name"
+done
+
+if command -v update-desktop-database &>/dev/null; then
+  update-desktop-database "$APP_DIR" 2>/dev/null || true
+fi
+if (( NO_DMS == 0 )); then
+  dms restart 2>/dev/null || true
+fi
+SCRIPT
+
+cat >"$BIN_DIR/niri-create-webapp" <<'SCRIPT'
+#!/bin/bash
+set -euo pipefail
+
+APP_DIR="$HOME/.local/share/applications"
+ICON_DIR="$HOME/.local/share/applications/icons"
+BIN_DIR="$HOME/.local/bin"
+mkdir -p "$ICON_DIR"
+
+if ! pgrep -x dms &>/dev/null; then
+  echo "Warning: dms not detected — skipping desktop database refresh." >&2
+  NO_DMS=1
+else
+  NO_DMS=0
+fi
+
+read -r -p "Name: " NAME
+read -r -p "URL: " URL
+read -r -p "Icon URL: " ICON_URL
+
+ICON_FILE="$ICON_DIR/$NAME.png"
+
+echo "Downloading icon..."
+if ! curl -fsSL -o "$ICON_FILE" "$ICON_URL"; then
+  echo "Failed to download icon from $ICON_URL" >&2
+  exit 1
+fi
+
+cat >"$APP_DIR/$NAME.desktop" <<EOF
+[Desktop Entry]
+Version=1.0
+Name=$NAME
+Comment=$NAME
+Exec=$BIN_DIR/niri-launch-webapp $URL
+Terminal=false
+Type=Application
+Icon=$ICON_FILE
+StartupNotify=true
+EOF
+
+chmod +x "$APP_DIR/$NAME.desktop"
+echo "Created $APP_DIR/$NAME.desktop"
+
+if command -v update-desktop-database &>/dev/null; then
+  update-desktop-database "$APP_DIR" 2>/dev/null || true
+fi
+
+if (( NO_DMS == 0 )); then
+  dms restart 2>/dev/null || true
+fi
+
+echo "Done — $NAME installed."
 SCRIPT
 
 cat >"$BIN_DIR/niri-window-close-all" <<'SCRIPT'
@@ -101,7 +198,8 @@ SCRIPT
 chmod +x "$BIN_DIR/niri-launch-webapp" "$BIN_DIR/niri-launch-or-focus" \
         "$BIN_DIR/niri-launch-or-focus-webapp" \
         "$BIN_DIR/niri-webapp-handler-hey" "$BIN_DIR/niri-webapp-handler-zoom" \
-        "$BIN_DIR/niri-webapp-remove" "$BIN_DIR/niri-window-close-all"
+        "$BIN_DIR/niri-webapp-remove" "$BIN_DIR/niri-create-webapp" \
+        "$BIN_DIR/niri-window-close-all"
 
 # ── Step 3: download icons ──
 
@@ -243,3 +341,5 @@ fi
 echo ""
 echo "All done — 18 webapps installed and ready."
 echo "PATH updated for this session. Open your app launcher (Mod+Space) to see them."
+echo ""
+echo "💡 Use 'niri-create-webapp' to interactively add more webapps."
