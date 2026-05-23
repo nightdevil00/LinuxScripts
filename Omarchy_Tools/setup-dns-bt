@@ -76,7 +76,18 @@ else
 fi
 
 # ══════════════════════════════════════════════════════════
-# 4. Apply DNS changes now
+# ══════════════════════════════════════════════════════════
+# 4. Enable systemd-resolved — so it starts at boot
+# ══════════════════════════════════════════════════════════
+step "Enabling systemd-resolved at boot …"
+
+systemctl enable systemd-resolved.service &>/dev/null || true
+systemctl enable systemd-resolved-varlink.socket &>/dev/null || true
+
+info "systemd-resolved enabled"
+
+# ══════════════════════════════════════════════════════════
+# 5. Apply DNS changes now
 # ══════════════════════════════════════════════════════════
 step "Applying DNS changes …"
 
@@ -93,7 +104,7 @@ systemctl restart dhcpcd 2>/dev/null || true
 info "DNS changes applied"
 
 # ══════════════════════════════════════════════════════════
-# 5. Bluetooth — ensure powered on at boot
+# 6. Bluetooth — ensure powered on at boot
 # ══════════════════════════════════════════════════════════
 step "Installing Bluetooth power-on service …"
 
