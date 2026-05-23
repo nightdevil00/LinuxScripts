@@ -1,0 +1,133 @@
+#!/bin/bash
+set -euo pipefail
+
+# ── Config ──────────────────────────────────────────────
+WLAN_IFACE="${1:-wlan0}"
+DNS4="1.1.1.1 1.0.0.1"
+DNS6="2606:4700:4700::1111 2606:4700:4700::1001"
+DNS_DOMAIN="~."
+
+# ── Colors ──────────────────────────────────────────────
+green='\033[0;32m'; yellow='\033[1;33m'; cyan='\033[0;36m'; none='\033[0m'
+
+info()  { echo -e "${green}[✓]${none} $1"; }
+warn()  { echo -e "${yellow}[!]${none} $1"; }
+step()  { echo -e "${cyan}==>${none} $1"; }
+
+# ── Root check ──────────────────────────────────────────
+if [[ $EUID -ne 0 ]]; then
+    echo "Run as root (sudo $0)" >&2
+    exit 1
+fi
+
+# ══════════════════════════════════════════════════════════
+# 1. Configure dhcpcd — stop it from touching resolv.conf
+# ══════════════════════════════════════════════════════════
+step "Configuring dhcpcd to not manage resolv.conf …"
+
+DHCPCD_CONF="/etc/dhcpcd.conf"
+grep -qxF 'nohook resolv.conf' "$DHCPCD_CONF" 2>/dev/null ||
+    sed -i '/^persistent$/i nohook resolv.conf' "$DHCPCD_CONF"
+
+grep -qxF 'nooption domain_name_servers' "$DHCPCD_CONF" 2>/dev/null ||
+    sed -i '/^persistent$/i nooption domain_name_servers' "$DHCPCD_CONF"
+
+info "dhcpcd configured"
+
+# ══════════════════════════════════════════════════════════
+# 2. Install dhcpcd hook — force Cloudflare DNS on wlan0
+# ══════════════════════════════════════════════════════════
+HOOK_DIR="/usr/lib/dhcpcd/dhcpcd-hooks"
+HOOK_FILE="$HOOK_DIR/90-dns-cloudflare"
+
+step "Installing dhcpcd hook to force Cloudflare DNS on $WLAN_IFACE …"
+
+mkdir -p "$HOOK_DIR"
+cat > "$HOOK_FILE" << HOOKEOF
+#!/bin/bash
+# Force Cloudflare DNS on \$WLAN_IFACE via systemd-resolved
+# Runs when dhcpcd configures an interface
+
+if [ "\$interface" = "$WLAN_IFACE" ] && [ "\$if_up" = "true" ]; then
+    /usr/bin/resolvectl dns "$WLAN_IFACE" $DNS4 $DNS6
+    /usr/bin/resolvectl domain "$WLAN_IFACE" $DNS_DOMAIN
+fi
+HOOKEOF
+chmod +x "$HOOK_FILE"
+
+info "dhcpcd hook installed"
+
+# ══════════════════════════════════════════════════════════
+# 3. Configure systemd-resolved — global Cloudflare fallback
+# ══════════════════════════════════════════════════════════
+step "Ensuring systemd-resolved has Cloudflare as global DNS …"
+
+RESOLVED_CONF="/etc/systemd/resolved.conf"
+if ! grep -q '1.1.1.1' "$RESOLVED_CONF" 2>/dev/null; then
+    cat > "$RESOLVED_CONF" << 'CONFEOF'
+[Resolve]
+DNS=1.1.1.1#cloudflare-dns.com 1.0.0.1#cloudflare-dns.com 2606:4700:4700::1111#cloudflare-dns.com 2606:4700:4700::1001#cloudflare-dns.com
+FallbackDNS=9.9.9.9#dns.quad9.net 149.112.112.112#dns.quad9.net 2620:fe::fe#dns.quad9.net 2620:fe::9#dns.quad9.net
+DNSOverTLS=opportunistic
+CONFEOF
+    info "systemd-resolved configured"
+else
+    info "systemd-resolved already configured"
+fi
+
+# ══════════════════════════════════════════════════════════
+# 4. Apply DNS changes now
+# ══════════════════════════════════════════════════════════
+step "Applying DNS changes …"
+
+systemctl restart systemd-resolved
+
+# Set link-level DNS immediately if interface exists
+if ip link show "$WLAN_IFACE" &>/dev/null; then
+    resolvectl dns "$WLAN_IFACE" $DNS4 $DNS6 2>/dev/null || true
+    resolvectl domain "$WLAN_IFACE" $DNS_DOMAIN 2>/dev/null || true
+fi
+
+systemctl restart dhcpcd 2>/dev/null || true
+
+info "DNS changes applied"
+
+# ══════════════════════════════════════════════════════════
+# 5. Bluetooth — ensure powered on at boot
+# ══════════════════════════════════════════════════════════
+step "Installing Bluetooth power-on service …"
+
+BT_SERVICE="/etc/systemd/system/bt-power-on.service"
+cat > "$BT_SERVICE" << 'BTEOF'
+[Unit]
+Description=Ensure Bluetooth adapter is powered on
+After=bluetooth.service
+Wants=bluetooth.service
+
+[Service]
+Type=oneshot
+ExecStartPre=/usr/bin/sleep 2
+ExecStart=/usr/bin/rfkill unblock bluetooth
+ExecStart=/usr/bin/bluetoothctl power on
+RemainAfterExit=no
+
+[Install]
+WantedBy=multi-user.target
+BTEOF
+
+systemctl daemon-reload
+systemctl enable bt-power-on.service 2>/dev/null || true
+
+# Apply now
+rfkill unblock bluetooth 2>/dev/null || true
+bluetoothctl power on 2>/dev/null || true
+
+info "Bluetooth power-on service installed & applied"
+
+# ══════════════════════════════════════════════════════════
+echo
+echo -e "${green}All done!${none}"
+echo "  DNS:     $WLAN_IFACE uses Cloudflare (1.1.1.1) with DNS-over-TLS"
+echo "  BT:      Powered on at boot via bt-power-on.service"
+echo
+resolvectl status "$WLAN_IFACE" 2>/dev/null | grep -E 'DNS Servers|Current DNS'
