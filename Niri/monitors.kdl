@@ -1,0 +1,17 @@
+output "HDMI-A-4" {
+      mode "1920x1080@60.000"
+      scale 1
+      position x=0 y=0
+}
+
+output "eDP-1" {
+      mode "1920x1080@60.003"
+      scale 1
+      position x=1920 y=0
+}
+
+//named workspaces
+workspace "1"
+workspace "2"
+workspace "3"
+workspace "4"
