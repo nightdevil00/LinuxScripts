@@ -1,0 +1,36 @@
+#!/bin/bash
+set -euo pipefail
+
+echo "=== Installing OBS Studio + Wayland screen capture dependencies ==="
+
+pkgs=(
+  obs-studio
+  pipewire wireplumber pipewire-pulse pipewire-jack pipewire-alsa
+  xdg-desktop-portal-gnome
+  gst-plugin-pipewire
+  gpu-screen-recorder
+)
+
+sudo pacman -S --needed "${pkgs[@]}"
+
+if command -v niri &>/dev/null; then
+  portal="niri"
+elif command -v Hyprland &>/dev/null; then
+  portal="hyprland"
+  sudo pacman -S --needed xdg-desktop-portal-hyprland
+  sudo pacman -Rs xdg-desktop-portal-gnome 2>/dev/null || true
+else
+  portal="generic-wayland"
+fi
+
+echo ""
+echo "=== Done ==="
+echo "Packages installed: ${pkgs[*]}"
+echo "Detected compositor: $portal"
+echo ""
+echo "Make sure these env vars are set in your compositor config:"
+echo "  XDG_CURRENT_DESKTOP=$portal"
+echo "  GDK_BACKEND=wayland,x11,*"
+echo "  QT_QPA_PLATFORM=wayland;xcb"
+echo ""
+echo "In OBS, add a 'Screen Capture (PipeWire)' source."
