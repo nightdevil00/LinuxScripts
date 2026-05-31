@@ -1,0 +1,103 @@
+#!/bin/bash
+# Idempotent script: forces Chrome/Chromium onto NVIDIA GPU on Optimus + Wayland
+# and enables VA-API hardware video decode.
+# Safe to run multiple times on the same system.
+
+set -euo pipefail
+
+BINDIR="${HOME}/.local/bin"
+FLAGSDIR="${HOME}/.config"
+APPDIR="${HOME}/.local/share/applications"
+
+echo "==> Creating directories"
+mkdir -p "$BINDIR" "$APPDIR"
+
+# ─── prime-run wrapper ───────────────────────────────────────────────
+echo "==> Writing $BINDIR/prime-run"
+cat > "$BINDIR/prime-run" << 'PRIME'
+#!/bin/bash
+__NV_PRIME_RENDER_OFFLOAD=1 \
+__GLX_VENDOR_LIBRARY_NAME=nvidia \
+__EGL_VENDOR_LIBRARY_FILENAMES=/usr/share/glvnd/egl_vendor.d/50_nvidia.json \
+VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/nvidia_icd.json \
+exec "$@"
+PRIME
+chmod +x "$BINDIR/prime-run"
+
+# ─── Google Chrome flags ─────────────────────────────────────────────
+echo "==> Writing $FLAGSDIR/chrome-flags.conf"
+cat > "$FLAGSDIR/chrome-flags.conf" << 'CHROME'
+--ozone-platform-hint=wayland
+--ozone-platform=wayland
+--enable-features=VaapiIgnoreDriverChecks,VaapiVideoDecoder,VaapiVideoEncoder,UseWaylandExplicitCommit
+--enable-accelerated-video-decode
+--use-gl=egl
+CHROME
+
+# ─── Chromium flags ──────────────────────────────────────────────────
+echo "==> Writing $FLAGSDIR/chromium-flags.conf"
+cat > "$FLAGSDIR/chromium-flags.conf" << 'CHROMIUM'
+--ozone-platform-hint=wayland
+--ozone-platform=wayland
+--enable-features=VaapiIgnoreDriverChecks,VaapiVideoDecoder,VaapiVideoEncoder,UseWaylandExplicitCommit
+--enable-accelerated-video-decode
+--use-gl=egl
+CHROMIUM
+
+# ─── Google Chrome desktop override ──────────────────────────────────
+echo "==> Writing $APPDIR/google-chrome.desktop"
+cat > "$APPDIR/google-chrome.desktop" << 'CHROMED'
+[Desktop Entry]
+Version=1.0
+Name=Google Chrome
+GenericName=Web Browser
+Comment=Access the Internet
+Exec=prime-run /usr/bin/google-chrome-stable %U
+StartupNotify=true
+Terminal=false
+Icon=google-chrome
+Type=Application
+Categories=Network;WebBrowser;
+MimeType=application/pdf;application/rdf+xml;application/rss+xml;application/xhtml+xml;application/xhtml_xml;application/xml;image/gif;image/jpeg;image/png;image/webp;text/html;text/xml;x-scheme-handler/http;x-scheme-handler/https;x-scheme-handler/google-chrome;
+Actions=new-window;new-private-window;
+
+[Desktop Action new-window]
+Name=New Window
+Exec=prime-run /usr/bin/google-chrome-stable
+
+[Desktop Action new-private-window]
+Name=New Incognito Window
+Exec=prime-run /usr/bin/google-chrome-stable --incognito
+CHROMED
+
+# ─── Chromium desktop override ───────────────────────────────────────
+echo "==> Writing $APPDIR/chromium.desktop"
+cat > "$APPDIR/chromium.desktop" << 'CHROMID'
+[Desktop Entry]
+Version=1.0
+Name=Chromium
+GenericName=Web Browser
+Comment=Access the Internet
+Exec=prime-run /usr/bin/chromium %U
+StartupNotify=true
+Terminal=false
+Icon=chromium
+Type=Application
+Categories=Network;WebBrowser;
+MimeType=application/pdf;application/rdf+xml;application/rss+xml;application/xhtml+xml;application/xhtml_xml;application/xml;image/gif;image/jpeg;image/png;image/webp;text/html;text/xml;x-scheme-handler/http;x-scheme-handler/https;x-scheme-handler/chromium;
+Actions=new-window;new-private-window;
+
+[Desktop Action new-window]
+Name=New Window
+Exec=prime-run /usr/bin/chromium
+
+[Desktop Action new-private-window]
+Name=New Incognito Window
+Exec=prime-run /usr/bin/chromium --incognito
+CHROMID
+
+echo "==> Done. Update desktop database:"
+echo "    update-desktop-database ~/.local/share/applications/"
+echo ""
+echo "Then launch Chrome/Chromium from your app launcher (or terminal with prime-run)."
+echo "Verify at chrome://gpu — NVIDIA should be *ACTIVE*, not Intel."
