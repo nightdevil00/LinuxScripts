@@ -1,0 +1,173 @@
+#!/usr/bin/env python3
+"""Fix Limine boot config for omaniri.
+
+After limine-snapper-sync nests Snapshots under a bootable entry,
+this script extracts Snapshots to a top-level sibling entry.
+
+Desired structure:
+  /Omaniri Linux       (directly bootable, no nesting)
+      comment: machine-id=...
+      protocol: linux
+      kernel_path: ...
+
+  /linux fallback       (directly bootable)
+
+  /Snapshots            (separate collapsible folder)
+
+Makes 2 timestamped backups. Idempotent.
+Usage: sudo limine-fix [/path/to/limine.conf]
+"""
+
+import re, sys, shutil
+from pathlib import Path
+from datetime import datetime
+
+ENTRY_RE = re.compile(r"^(\s*)(/+)(\S.*)$")
+TAB = " " * 4
+
+
+def log(msg):
+    print(msg, file=sys.stderr)
+
+
+def backup(path):
+    ts = datetime.now().strftime("%Y%m%d-%H%M%S")
+    for i in range(1, 3):
+        bak = path.with_name(f"{path.name}.bak.{ts}.{i}")
+        shutil.copy2(path, bak)
+        log(f"Backup ({i}): {bak}")
+
+
+def parse(lines):
+    entries = []
+    i = 0
+    while i < len(lines):
+        m = ENTRY_RE.match(lines[i])
+        if m:
+            depth = len(m.group(2)) - 1
+            name = m.group(3)
+            body = []
+            i += 1
+            while i < len(lines):
+                if ENTRY_RE.match(lines[i]):
+                    break
+                s = lines[i]
+                if s.strip() and not (s.startswith(" ") or s.startswith("\t")):
+                    break
+                body.append(s)
+                i += 1
+            entries.append({"depth": depth, "name": name, "body": body, "children": []})
+        else:
+            entries.append({"depth": -1, "name": None, "body": [lines[i]], "children": []})
+            i += 1
+    stack = []
+    for e in entries:
+        if e["depth"] < 0:
+            continue
+        while stack and stack[-1]["depth"] >= e["depth"]:
+            stack.pop()
+        if stack:
+            stack[-1]["children"].append(e)
+        stack.append(e)
+    return entries
+
+
+def rebuild(entries):
+    out = []
+    for e in entries:
+        if e["depth"] < 0:
+            out.append("".join(e["body"]))
+        elif e["depth"] == 0:
+            _render(e, out)
+    return "".join(out)
+
+
+def _render(e, out):
+    out.append(TAB * e["depth"] + "/" * (e["depth"] + 1) + e["name"] + "\n")
+    for line in e["body"]:
+        out.append(TAB * (e["depth"] + 1) + line.lstrip() if line.strip() else line)
+    for child in e["children"]:
+        _render(child, out)
+
+
+def needs_fix(entries):
+    """True if a top-level entry has Snapshots as a child."""
+    for e in entries:
+        if e["depth"] == 0 and e["children"]:
+            for c in e["children"]:
+                if "Snapshots" in c["name"]:
+                    return True
+    return False
+
+
+def main():
+    path = Path(sys.argv[1]) if len(sys.argv) > 1 else Path("/boot/limine.conf")
+    if not path.exists():
+        log(f"Error: {path} not found")
+        sys.exit(1)
+
+    lines = path.read_text().splitlines(keepends=True)
+    entries = parse(lines)
+
+    if not needs_fix(entries):
+        log("Config is already flat -- nothing to do")
+        return
+
+    backup(path)
+
+    # Find the parent that has //Snapshots as child
+    parent = None
+    snap = None
+    for e in entries:
+        if e["depth"] == 0 and e["children"]:
+            for c in e["children"]:
+                if "Snapshots" in c["name"]:
+                    snap = c
+                    parent = e
+                    break
+        if parent:
+            break
+
+    if not snap or not parent:
+        log("Error: Snapshots not found as a child")
+        sys.exit(1)
+
+    # Remove Snapshots from parent's children
+    parent["children"] = [c for c in parent["children"] if c is not snap]
+
+    # Make Snapshots top-level
+    snap["depth"] = 0
+
+    # Fix its own body indentation (currently at parent's body indent + 4)
+    snap["body"] = [
+        (TAB * 1 + line.lstrip()) if line.strip() else line
+        for line in snap["body"]
+    ]
+    snap["body"] = [l for l in snap["body"] if l.strip() or l == "\n"]
+
+    # Decrease depth of all descendants by 1
+    def reindex(e):
+        e["depth"] -= 1
+        for c in e.get("children", []):
+            reindex(c)
+
+    for child in list(snap["children"]):
+        reindex(child)
+
+    # Move to end of flat list
+    idx = next(i for i, e in enumerate(entries) if e is snap)
+    entries.pop(idx)
+
+    pos = len(entries)
+    for i in range(len(entries) - 1, -1, -1):
+        if entries[i]["depth"] >= 0:
+            pos = i + 1
+            break
+    entries.insert(pos, snap)
+
+    path.write_text(rebuild(entries))
+    log("Snapshots extracted to top-level")
+
+
+if __name__ == "__main__":
+    main()
