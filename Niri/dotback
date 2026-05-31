@@ -1,0 +1,191 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+DATE=$(date +%Y-%m-%d_%H-%M-%S)
+BACKUP_DIR="$HOME/backups/dotfiles_$DATE"
+DRY_RUN=false
+
+usage() {
+  cat <<EOF
+Usage: $(basename "$0") {backup|restore} [--dry-run]
+
+Commands:
+  backup   Create a dotfiles backup archive
+  restore  Restore from a dotfiles backup archive
+  help     Show this help message
+
+Options:
+  --dry-run  Show what would be done without doing it
+EOF
+}
+
+log_info()  { echo -e "[\e[34mINFO\e[0m]  $*"; }
+log_ok()    { echo -e "[\e[32mOK\e[0m]    $*"; }
+log_warn()  { echo -e "[\e[33mWARN\e[0m]  $*"; }
+log_error() { echo -e "[\e[31mERROR\e[0m] $*"; }
+
+run_or_dry() {
+  if "$DRY_RUN"; then
+    log_info "[DRY-RUN] $*"
+  else
+    eval "$@"
+  fi
+}
+
+check_deps() {
+  local deps=("tar" "gzip" "pacman")
+  for d in "${deps[@]}"; do
+    if ! command -v "$d" &>/dev/null; then
+      log_error "'$d' is required but not installed."
+      exit 1
+    fi
+  done
+  if ! "$DRY_RUN"; then
+    mkdir -p "$BACKUP_DIR"
+  fi
+}
+
+backup_packages() {
+  log_info "Exporting package lists..."
+
+  run_or_dry pacman -Qqen \> "$BACKUP_DIR/packages-official.txt"
+  log_ok "Official packages saved."
+
+  if command -v yay &>/dev/null; then
+    # AUR packages: those in the AUR that are explicitly installed
+    run_or_dry pacman -Qqem \> "$BACKUP_DIR/packages-aur.txt"
+    log_ok "AUR packages saved (via pacman)."
+  elif command -v paru &>/dev/null; then
+    run_or_dry pacman -Qqem \> "$BACKUP_DIR/packages-aur.txt"
+    log_ok "AUR packages saved (via pacman)."
+  else
+    log_warn "No AUR helper (yay/paru) found; saving what pacman -Qqm reports."
+    run_or_dry pacman -Qqm \> "$BACKUP_DIR/packages-aur.txt"
+    log_ok "External/AUR packages saved."
+  fi
+}
+
+backup_dirs() {
+  local src="$HOME"
+
+  log_info "Archiving directories (excluding google-chrome and steam)..."
+  log_info "Source: $src/.config and $src/.local"
+
+  local exclude_opts=()
+  for pattern in "google-chrome" "Steam" "steam"; do
+    exclude_opts+=(--exclude="$pattern" --exclude="*/$pattern" --exclude="$pattern/*" --exclude="*/$pattern/*")
+  done
+
+  local config_archive="$BACKUP_DIR/config.tar.gz"
+  local local_archive="$BACKUP_DIR/local.tar.gz"
+
+  run_or_dry tar czf "$config_archive" "${exclude_opts[@]}" -C "$src" .config
+
+  # For .local, only take selected subdirectories to avoid bloating
+  if [ -d "$src/.local/share" ]; then
+    run_or_dry tar czf "$local_archive" "${exclude_opts[@]}" -C "$src" .local/share .local/bin .local/state 2>/dev/null || \
+    run_or_dry tar czf "$local_archive" "${exclude_opts[@]}" -C "$src" .local/share .local/bin 2>/dev/null || \
+    run_or_dry tar czf "$local_archive" "${exclude_opts[@]}" -C "$src" .local/share 2>/dev/null || \
+    log_warn ".local backup may be incomplete; some paths were missing."
+  else
+    run_or_dry tar czf "$local_archive" "${exclude_opts[@]}" -C "$src" .local 2>/dev/null || \
+    log_warn ".local directory does not exist, skipping."
+  fi
+
+  log_ok "Config archive: $config_archive"
+  log_ok "Local archive:  $local_archive"
+}
+
+backup() {
+  check_deps
+  backup_packages
+  backup_dirs
+
+  # Create a checksum manifest
+  run_or_dry cd "$BACKUP_DIR" \&\& sha256sum packages-official.txt packages-aur.txt config.tar.gz local.tar.gz \> checksums.sha256
+
+  log_ok "Backup complete: $BACKUP_DIR"
+  echo ""
+  echo "  Archive contents:"
+  du -sh "$BACKUP_DIR"/*.tar.gz "$BACKUP_DIR"/*.txt "$BACKUP_DIR"/checksums.sha256 2>/dev/null | sed 's/^/    /'
+  echo ""
+  echo "  To restore later, run:"
+  echo "    $(basename "$0") restore [--dry-run]"
+}
+
+restore() {
+  local latest
+  latest=$(ls -dt "$HOME/backups"/dotfiles_* 2>/dev/null | head -1) || true
+
+  if [ -z "$latest" ]; then
+    log_error "No backups found in $HOME/backups/dotfiles_*"
+    exit 1
+  fi
+
+  echo "Available backups:"
+  select dir in $(ls -dt "$HOME/backups"/dotfiles_*); do
+    if [ -n "$dir" ]; then
+      latest="$dir"
+      break
+    else
+      echo "Invalid selection."
+    fi
+  done
+
+  if [ ! -f "$latest/packages-official.txt" ] || [ ! -f "$latest/packages-aur.txt" ]; then
+    log_error "Package lists not found in $latest"
+    exit 1
+  fi
+
+  log_info "Restoring from: $latest"
+
+  # Restore packages
+  log_info "Installing official packages..."
+  run_or_dry sudo pacman -S --needed --noconfirm - \< "$latest/packages-official.txt"
+
+  if [ -s "$latest/packages-aur.txt" ]; then
+    if command -v yay &>/dev/null; then
+      log_info "Installing AUR packages with yay..."
+      run_or_dry yay -S --needed --noconfirm - \< "$latest/packages-aur.txt"
+    elif command -v paru &>/dev/null; then
+      log_info "Installing AUR packages with paru..."
+      run_or_dry paru -S --needed --noconfirm - \< "$latest/packages-aur.txt"
+    else
+      log_warn "No AUR helper found; AUR packages NOT reinstalled."
+      log_warn "File: $latest/packages-aur.txt"
+    fi
+  fi
+
+  # Restore configs
+  if [ -f "$latest/config.tar.gz" ]; then
+    log_info "Restoring .config ..."
+    run_or_dry tar xzf "$latest/config.tar.gz" -C "$HOME"
+    log_ok ".config restored."
+  fi
+
+  if [ -f "$latest/local.tar.gz" ]; then
+    log_info "Restoring .local ..."
+    run_or_dry tar xzf "$latest/local.tar.gz" -C "$HOME"
+    log_ok ".local restored."
+  fi
+
+  log_ok "Restore complete."
+}
+
+# ---- MAIN ----
+
+case "${1:-help}" in
+  backup)
+    shift
+    if [[ "${1:-}" == "--dry-run" ]]; then DRY_RUN=true; fi
+    backup
+    ;;
+  restore)
+    shift
+    if [[ "${1:-}" == "--dry-run" ]]; then DRY_RUN=true; fi
+    restore
+    ;;
+  help|--help|-h|*)
+    usage
+    ;;
+esac
