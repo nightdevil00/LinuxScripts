@@ -1,0 +1,61 @@
+#!/bin/bash
+set -euo pipefail
+
+SERVERS="94.140.14.14,94.140.15.15"
+SERVERS_SPACE="94.140.14.14 94.140.15.15"
+NM_DNS_CONF=/etc/NetworkManager/conf.d/20-omarchy-dns.conf
+
+require_root() {
+  if (( EUID != 0 )); then
+    exec sudo "$0" "$@"
+  fi
+}
+
+require_root
+
+install -d -m 0755 "$(dirname "$NM_DNS_CONF")"
+cat >"$NM_DNS_CONF" <<EOF
+# Managed by omarchy-dns-adguard
+[global-dns]
+
+[global-dns-domain-*]
+servers=$SERVERS
+EOF
+
+tee /etc/systemd/resolved.conf >/dev/null <<EOF
+[Resolve]
+DNS=$SERVERS_SPACE
+FallbackDNS=9.9.9.9#dns.quad9.net 149.112.112.112#dns.quad9.net 2620:fe::fe#dns.quad9.net 2620:fe::9#dns.quad9.net
+EOF
+
+# Apply to NetworkManager connections
+while IFS=: read -r uuid type; do
+  [[ -n $uuid ]] || continue
+  case "$type" in
+    802-11-wireless|802-3-ethernet)
+      nmcli connection modify "$uuid" \
+        ipv4.ignore-auto-dns yes \
+        ipv4.dns "94.140.14.14 94.140.15.15" \
+        ipv6.ignore-auto-dns yes \
+        ipv6.dns "" \
+        >/dev/null
+      ;;
+  esac
+done < <(nmcli -t -f UUID,TYPE connection show)
+
+# Reapply active connections
+while IFS=: read -r device type state; do
+  [[ -n $device && $state == connected ]] || continue
+  case "$type" in
+    wifi|ethernet)
+      nmcli device reapply "$device" >/dev/null 2>&1 || true
+      ;;
+  esac
+done < <(nmcli -t -f DEVICE,TYPE,STATE device status)
+
+# Reload DNS stack
+nmcli general reload conf >/dev/null 2>&1 || systemctl reload NetworkManager.service 2>/dev/null || true
+systemctl reload systemd-resolved.service 2>/dev/null || systemctl restart systemd-resolved.service
+nmcli general reload dns-full >/dev/null 2>&1 || true
+
+echo "AdGuard DNS ($SERVERS) applied."
